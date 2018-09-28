@@ -10,29 +10,50 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Function;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings({"unused", "ConstantConditions"})
 class Exercise4 {
 
     private static class LazyCollectionHelper<T, R> {
 
+        private List<T> source;
+        private Optional<Function<T, List<R>>> flatFunction;
+
+        private LazyCollectionHelper(List<T> source, Optional<Function<T, List<R>>> flatFunction) {
+            this.source = source;
+            this.flatFunction = flatFunction;
+        }
+
         public static <T> LazyCollectionHelper<T, T> from(List<T> list) {
-            throw new UnsupportedOperationException();
+            return new LazyCollectionHelper<>(list, Optional.empty());
         }
 
         public <U> LazyCollectionHelper<T, U> flatMap(Function<R, List<U>> flatMapping) {
-            throw new UnsupportedOperationException();
+            return new LazyCollectionHelper<>(source, Optional.of(flatFunction.map(func -> func.andThen(list ->{
+                List<U> result = new ArrayList<>();
+                list.forEach(flatMapping.andThen(result::addAll)::apply);
+                return result;
+            })).orElse((Function<T, List<U>>)flatMapping)));
+
         }
 
         public <U> LazyCollectionHelper<T, U> map(Function<R, U> mapping) {
-            throw new UnsupportedOperationException();
+            return new LazyCollectionHelper<>(source, Optional.of(flatFunction.map(func -> func.andThen(list -> {
+                List<U> result = new ArrayList<>();
+                list.forEach(mapping.andThen(result::add)::apply);
+                return result;
+            })).orElse((Function<T, List<U>>)mapping)));
         }
 
         public List<R> force() {
-            throw new UnsupportedOperationException();
+            List<R> result = new ArrayList<>();
+            flatFunction.ifPresent(func -> source.forEach(func.andThen(result::addAll)::apply));
+            return result.isEmpty() ? (List<R>) source : result;
         }
     }
 
@@ -40,14 +61,21 @@ class Exercise4 {
     void mapEmployeesToCodesOfLetterTheirPositionsUsingLazyFlatMapHelper() {
         List<Employee> employees = getEmployees();
 
-        List<Integer> codes = null;
-        // TODO              LazyCollectionHelper.from(employees)
-        // TODO                                  .flatMap(Employee -> JobHistoryEntry)
-        // TODO                                  .map(JobHistoryEntry -> String(position))
-        // TODO                                  .flatMap(String -> Character(letter))
-        // TODO                                  .map(Character -> Integer(code letter)
-        // TODO                                  .force();
-        assertThat(codes, Matchers.contains(calcCodes("dev", "dev", "tester", "dev", "dev", "QA", "QA", "dev", "tester", "tester", "QA", "QA", "QA", "dev")));
+        List<Integer> codes = LazyCollectionHelper.from(employees)
+                                          .flatMap(Employee::getJobHistory)
+                                          .map(JobHistoryEntry::getPosition)
+                                          .flatMap(Exercise4::calcCodes)
+                                          .map(i -> i)
+                                          .force();
+        assertThat(codes, Matchers.contains(calcCodes("dev", "dev", "tester", "dev", "dev", "QA", "QA", "dev", "tester", "tester", "QA", "QA", "QA", "dev").toArray()));
+    }
+
+    @Test
+    void mapEmployeesUsingLazyFlatMapHelper() {
+        List<Employee> employees = getEmployees();
+
+        List<Employee> employeeResultList = LazyCollectionHelper.from(employees).force();
+        assertEquals(employees, employeeResultList);
     }
 
     private static List<Integer> calcCodes(String...strings) {

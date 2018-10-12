@@ -7,9 +7,13 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -24,18 +28,27 @@ class Exercise1 {
     void calcTotalYearsSpentInEpam() {
         List<Employee> employees = getEmployees();
 
-        // TODO реализация
-        Long hours = null;
+        // реализация
+        Long hours = employees.stream()
+                .flatMap(employee -> employee.getJobHistory().stream())
+                .filter(jobHistoryEntry -> "EPAM".equals(jobHistoryEntry.getEmployer()))
+                .map(JobHistoryEntry::getDuration)
+                .mapToLong(Long::new)
+                .sum();
 
-        assertThat(hours, is(19));
+        assertThat(hours, is(19L));
     }
 
     @Test
     void findPersonsWithQaExperience() {
         List<Employee> employees = getEmployees();
 
-        // TODO реализация
-        Set<Person> workedAsQa = null;
+        // реализация
+        Set<Person> workedAsQa = employees.stream()
+                .filter(employee -> employee.getJobHistory().stream()
+                    .anyMatch(jobHistoryEntry -> "qa".equalsIgnoreCase(jobHistoryEntry.getPosition())))
+                .map(Employee::getPerson)
+                .collect(Collectors.toSet());
 
         assertThat(workedAsQa, containsInAnyOrder(
                 employees.get(2).getPerson(),
@@ -48,8 +61,11 @@ class Exercise1 {
     void composeFullNamesOfEmployeesUsingLineSeparatorAsDelimiter() {
         List<Employee> employees = getEmployees();
 
-        // TODO реализация
-        String result = null;
+        // реализация
+        String result = employees.stream()
+                .map(Employee::getPerson)
+                .map(Person::getFullName)
+                .collect(Collectors.joining("\n"));
 
         assertThat(result, is(
                 "Иван Мельников\n"
@@ -65,8 +81,16 @@ class Exercise1 {
     void groupPersonsByFirstPositionUsingToMap() {
         List<Employee> employees = getEmployees();
 
-        // TODO реализация
-        Map<String, Set<Person>> result = null;
+        // реализация
+        Map<String, Set<Person>> result = employees.stream()
+                .map(employee -> new HashMap<String, Set<Person>>(){{
+                    put(employee.getJobHistory()
+                            .stream()
+                            .findFirst()
+                            .orElseThrow(UnsupportedOperationException::new)
+                            .getPosition(), new HashSet<>(Collections.singletonList(employee.getPerson())));}})
+                .flatMap(map -> map.entrySet().stream())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (set1, set2) -> { set1.addAll(set2); return set1; }));
 
         assertThat(result, hasEntry(is("dev"), contains(employees.get(0).getPerson())));
         assertThat(result, hasEntry(is("QA"), containsInAnyOrder(employees.get(2).getPerson(), employees.get(5).getPerson())));
@@ -78,12 +102,24 @@ class Exercise1 {
     void groupPersonsByFirstPositionUsingGroupingByCollector() {
         List<Employee> employees = getEmployees();
 
-        // TODO реализация
-        Map<String, Set<Person>> result = null;
+        // реализация
+        Map<String, Set<Person>> result = employees
+                .stream()
+                .collect(Collectors.groupingBy(employee -> employee.getJobHistory()
+                                                                    .stream()
+                                                                    .findFirst()
+                                                                    .orElseThrow(UnsupportedOperationException::new)
+                                                                    .getPosition(), Collectors.toSet()))
+                .entrySet()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue()
+                                                                            .stream()
+                                                                            .map(Employee::getPerson)
+                                                                            .collect(Collectors.toSet())));
 
         assertThat(result, hasEntry(is("dev"), contains(employees.get(0).getPerson())));
         assertThat(result, hasEntry(is("QA"), containsInAnyOrder(employees.get(2).getPerson(), employees.get(5).getPerson())));
-        assertThat(result, hasEntry(is("test"), containsInAnyOrder(employees.get(1).getPerson(), employees.get(3).getPerson(), employees.get(4).getPerson())));
+        assertThat(result, hasEntry(is("tester"), containsInAnyOrder(employees.get(1).getPerson(), employees.get(3).getPerson(), employees.get(4).getPerson())));
     }
 
     private static List<Employee> getEmployees() {

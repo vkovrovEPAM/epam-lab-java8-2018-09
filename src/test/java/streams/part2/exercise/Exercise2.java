@@ -7,9 +7,14 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -76,7 +81,10 @@ class Exercise2 {
     void employersStuffList() {
         List<Employee> employees = getEmployees();
 
-        Map<String, Set<Person>> result = null;
+        Map<String, Set<Person>> result  = employees.stream()
+                .flatMap(emp -> emp.getJobHistory().stream()
+                        .map(entry -> new Tuple<>(emp.getPerson(), entry.getEmployer())))
+                .collect(Collectors.groupingBy(Tuple::getB, Collectors.mapping(Tuple::getA, Collectors.toSet())));
 
         assertThat(result, hasEntry((is("yandex")), contains(employees.get(2).getPerson())));
         assertThat(result, hasEntry((is("mail.ru")), contains(employees.get(2).getPerson())));
@@ -142,7 +150,11 @@ class Exercise2 {
     void indexByFirstEmployer() {
         List<Employee> employees = getEmployees();
 
-        Map<String, Set<Person>> result = null;
+        Map<String, Set<Person>> result = employees.stream()
+                .flatMap(employee -> employee.getJobHistory().stream()
+                        .limit(1)
+                        .map(entry -> new Tuple<>(employee.getPerson(), entry.getEmployer())))
+                .collect(Collectors.groupingBy(Tuple::getB, Collectors.mapping(Tuple::getA, Collectors.toSet())));
 
         assertThat(result, hasEntry(is("yandex"), contains(employees.get(2).getPerson())));
         assertThat(result, hasEntry(is("T-Systems"), containsInAnyOrder(employees.get(3).getPerson(), employees.get(5).getPerson())));
@@ -161,7 +173,18 @@ class Exercise2 {
     void greatestExperiencePerEmployer() {
         List<Employee> employees = getEmployees();
 
-        Map<String, Person> collect = null;
+        Map<String, Person> collect = employees.stream()
+                .flatMap(emp -> emp.getJobHistory().stream()
+                        .map(entry -> new Triple<>(emp.getPerson(), entry.getEmployer(), entry.getDuration())))
+                .collect(Collectors.toMap(triple -> new Tuple<>(triple.getA(), triple.getB()), Triple::getC, (t1, t2) -> t1 + t2))
+                .entrySet()
+                .stream()
+                .map(entry -> new Triple<>(entry.getKey().getA(), entry.getKey().getB(), entry.getValue()))
+                .collect(Collectors.toMap(Triple::getB, t1 -> new Tuple<>(t1.getA(), t1.getC()),
+                        (tuple1, tuple2) -> tuple1.getB() > tuple2.getB() ? tuple1 : tuple2))
+                .entrySet().stream()
+                .map(entry -> new Tuple<>(entry.getKey(), entry.getValue().getA()))
+                .collect(Collectors.toMap(Tuple::getA, Tuple::getB));
 
         assertThat(collect, hasEntry("EPAM", employees.get(4).getPerson()));
         assertThat(collect, hasEntry("google", employees.get(1).getPerson()));
